@@ -1,0 +1,46 @@
+version: 2.1
+
+orbs:
+  docker: circleci/docker@2.4.0
+
+jobs:
+  build-and-test:
+    docker:
+      - image: cimg/node:18.0
+    steps:
+      - checkout
+      - setup_remote_docker
+      - docker/build:
+          image: $DOCKER_IMAGE
+          tag: $CIRCLE_SHA1
+      - run:
+          name: Start container and test
+          command: |
+            docker run -d -p 8080:8080 --name app $DOCKER_IMAGE:$CIRCLE_SHA1
+            sleep 5
+            curl --retry 10 --retry-delay 1 --retry-connrefused http://localhost:8080
+
+  push-docker:
+    docker:
+      - image: cimg/node:18.0
+    steps:
+      - checkout
+      - setup_remote_docker
+      - docker/build:
+          image: $DOCKER_IMAGE
+          tag: $CIRCLE_SHA1
+      - docker/push:
+          image: $DOCKER_IMAGE
+          tag: $CIRCLE_SHA1
+
+workflows:
+  version: 2
+  build-test-deploy:
+    jobs:
+      - build-and-test
+      - push-docker:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              only: main
